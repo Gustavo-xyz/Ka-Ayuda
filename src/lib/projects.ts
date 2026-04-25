@@ -1,13 +1,6 @@
 import type { AyudaProject, DependencyItem } from "../types";
 
-export const PROJECTS_STORAGE_KEY = "ayuda-admin-projects";
-export const SHARED_PROJECTS_COOKIE_KEY = "ayuda-published-projects";
-const MAX_SHARED_COOKIE_LENGTH = 3800;
-
-export interface StorageLike {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-}
+export const PROJECTS_API_PATH = "/api/projects";
 
 export interface ValidationResult {
   isValid: boolean;
@@ -15,6 +8,44 @@ export interface ValidationResult {
 }
 
 export const defaultDependencyLabels = ["Funds Ready", "Venue Ready", "Staff Ready"];
+
+function normalizeProject(project: AyudaProject): AyudaProject {
+  return {
+    ...project,
+    name: typeof project.name === "string" ? project.name : "",
+    requirements: Array.isArray(project.requirements)
+      ? project.requirements.filter((item): item is string => typeof item === "string")
+      : [],
+    eligibility: Array.isArray(project.eligibility)
+      ? project.eligibility.filter((item): item is string => typeof item === "string")
+      : [],
+    location: {
+      address: project.location?.address ?? "",
+      placeId: project.location?.placeId,
+      lat: project.location?.lat,
+      lng: project.location?.lng,
+      mapsUrl: project.location?.mapsUrl ?? "",
+    },
+    schedule: project.schedule ?? "",
+    beneficiaryTarget: Number.isFinite(project.beneficiaryTarget) ? project.beneficiaryTarget : 0,
+    dependencies: Array.isArray(project.dependencies)
+      ? project.dependencies
+          .filter((dependency): dependency is DependencyItem => Boolean(dependency?.id && dependency?.label))
+          .map((dependency) => ({
+            id: dependency.id,
+            label: dependency.label,
+            ready: Boolean(dependency.ready),
+          }))
+      : [],
+    publishState: project.publishState === "published" ? "published" : "draft",
+    status: ["upcoming", "ongoing", "moved", "cancelled"].includes(project.status)
+      ? project.status
+      : "upcoming",
+    statusNote: project.statusNote ?? "",
+    createdAt: project.createdAt ?? new Date().toISOString(),
+    updatedAt: project.updatedAt ?? new Date().toISOString(),
+  };
+}
 
 export function createId(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -99,121 +130,67 @@ export function isProjectReady(project: AyudaProject): boolean {
   return project.dependencies.length > 0 && project.dependencies.every((item) => item.ready);
 }
 
-function canUseCookies(): boolean {
-  return typeof document !== "undefined" && typeof document.cookie === "string";
-}
-
-function readCookie(name: string): string | null {
-  if (!canUseCookies()) {
-    return null;
-  }
-
-  const cookie = document.cookie
-    .split(";")
-    .map((item) => item.trim())
-    .find((item) => item.startsWith(`${name}=`));
-
-  return cookie ? cookie.slice(name.length + 1) : null;
-}
-
-function writeCookie(name: string, value: string): void {
-  if (!canUseCookies()) {
-    return;
-  }
-
-  document.cookie = `${name}=${value}; Max-Age=31536000; Path=/; SameSite=Lax`;
-}
-
-function clearCookie(name: string): void {
-  if (!canUseCookies()) {
-    return;
-  }
-
-  document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
-}
-
-function loadSharedProjectsFromCookie(): AyudaProject[] {
-  const raw = readCookie(SHARED_PROJECTS_COOKIE_KEY);
-
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(decodeURIComponent(raw));
-    return Array.isArray(parsed) ? (parsed as AyudaProject[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveSharedProjectsToCookie(projects: AyudaProject[]): void {
-  const publishedProjects = projects.filter((project) => project.publishState === "published");
-  const encoded = encodeURIComponent(JSON.stringify(publishedProjects));
-
-  if (encoded.length > MAX_SHARED_COOKIE_LENGTH) {
-    clearCookie(SHARED_PROJECTS_COOKIE_KEY);
-    return;
-  }
-
-  writeCookie(SHARED_PROJECTS_COOKIE_KEY, encoded);
-}
-
-function mergeProjects(projectGroups: AyudaProject[][]): AyudaProject[] {
-  const merged = new Map<string, AyudaProject>();
-
-  for (const projects of projectGroups) {
-    for (const project of projects) {
-      merged.set(project.id, project);
-    }
-  }
-
-  return Array.from(merged.values()).sort((left, right) => {
-    if (!left.schedule || !right.schedule) {
-      return left.name.localeCompare(right.name);
-    }
-
-    return new Date(left.schedule).getTime() - new Date(right.schedule).getTime();
+async function requestProjects<T>(
+  path: string,
+  options: RequestInit,
+  fetchFn: typeof fetch = fetch,
+): Promise<T> {
+  const response = await fetchFn(path, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    ...options,
   });
-}
 
-export function loadProjects(storage: StorageLike = window.localStorage): AyudaProject[] {
-  try {
-    const raw = storage.getItem(PROJECTS_STORAGE_KEY);
-
-    if (!raw) {
-      return loadSharedProjectsFromCookie();
-    }
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as AyudaProject[]) : [];
-  } catch {
-    return [];
+  if (!response.ok) {
+    throw new Error(`Project API request failed (${response.status}).`);
   }
+
+  return (await response.json()) as T;
 }
 
-export function saveProjects(projects: AyudaProject[], storage: StorageLike = window.localStorage): void {
-  storage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
-  saveSharedProjectsToCookie(projects);
+export async function loadProjects(fetchFn: typeof fetch = fetch): Promise<AyudaProject[]> {
+  const projects = await requestProjects<AyudaProject[]>(PROJECTS_API_PATH, { method: "GET" }, fetchFn);
+  return Array.isArray(projects) ? projects.map(normalizeProject) : [];
 }
 
-export function loadPublishedProjects(storage: StorageLike = window.localStorage): AyudaProject[] {
-  const localProjects = loadProjects(storage).filter((project) => project.publishState === "published");
-  const sharedProjects = loadSharedProjectsFromCookie().filter((project) => project.publishState === "published");
+export async function loadPublishedProjects(fetchFn: typeof fetch = fetch): Promise<AyudaProject[]> {
+  const projects = await requestProjects<AyudaProject[]>(`${PROJECTS_API_PATH}?published=true`, { method: "GET" }, fetchFn);
+  return Array.isArray(projects) ? projects.map(normalizeProject) : [];
+}
 
-  return mergeProjects([sharedProjects, localProjects]);
+export async function saveProject(project: AyudaProject, fetchFn: typeof fetch = fetch): Promise<AyudaProject> {
+  const saved = await requestProjects<AyudaProject>(
+    PROJECTS_API_PATH,
+    {
+      method: "POST",
+      body: JSON.stringify(normalizeProject(project)),
+    },
+    fetchFn,
+  );
+
+  return normalizeProject(saved);
+}
+
+export async function saveProjects(
+  projects: AyudaProject[],
+  fetchFn: typeof fetch = fetch,
+): Promise<AyudaProject[]> {
+  const savedProjects: AyudaProject[] = [];
+
+  for (const project of projects) {
+    savedProjects.push(await saveProject(project, fetchFn));
+  }
+
+  return savedProjects;
 }
 
 export function upsertProject(projects: AyudaProject[], project: AyudaProject): AyudaProject[] {
-  const updatedProject = {
-    ...project,
-    updatedAt: new Date().toISOString(),
-  };
   const existingIndex = projects.findIndex((item) => item.id === project.id);
 
   if (existingIndex === -1) {
-    return [updatedProject, ...projects];
+    return [project, ...projects];
   }
 
-  return projects.map((item) => (item.id === project.id ? updatedProject : item));
+  return projects.map((item) => (item.id === project.id ? project : item));
 }

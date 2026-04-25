@@ -20,8 +20,8 @@ import {
   createEmptyProject,
   isProjectReady,
   loadProjects,
+  saveProject,
   sanitizeLineList,
-  saveProjects,
   upsertProject,
   validateProjectForPublish,
 } from "./lib/projects";
@@ -125,7 +125,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
     () => window.sessionStorage.getItem(AUTH_STORAGE_KEY) === "true",
   );
-  const [projects, setProjects] = useState<AyudaProject[]>(() => loadProjects());
+  const [projects, setProjects] = useState<AyudaProject[]>([]);
   const [draft, setDraft] = useState<AyudaProject>(() => createEmptyProject());
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -135,10 +135,16 @@ function App() {
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [formMessage, setFormMessage] = useState("");
   const [newDependencyLabel, setNewDependencyLabel] = useState("");
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    saveProjects(projects);
-  }, [projects]);
+    if (!isAuthenticated) {
+      return;
+    }
+
+    void refreshProjects();
+  }, [isAuthenticated]);
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -175,6 +181,20 @@ function App() {
     setIsAuthenticated(false);
   }
 
+  async function refreshProjects() {
+    try {
+      setIsLoadingProjects(true);
+      setFormErrors([]);
+      const loadedProjects = await loadProjects();
+      setProjects(loadedProjects);
+    } catch {
+      setFormErrors(["Could not load projects from the database."]);
+      setFormMessage("");
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }
+
   function startNewProject() {
     setDraft(createEmptyProject());
     setSelectedProjectId(null);
@@ -191,16 +211,26 @@ function App() {
     setNewDependencyLabel("");
   }
 
-  function persistProject(project: AyudaProject, message: string) {
+  async function persistProject(project: AyudaProject, message: string) {
     const normalized = normalizeProject(project);
-    setProjects((current) => upsertProject(current, normalized));
-    setDraft(cloneProject(normalized));
-    setSelectedProjectId(normalized.id);
-    setFormErrors([]);
-    setFormMessage(message);
+
+    try {
+      setIsSyncing(true);
+      const savedProject = await saveProject(normalized);
+      setProjects((current) => upsertProject(current, savedProject));
+      setDraft(cloneProject(savedProject));
+      setSelectedProjectId(savedProject.id);
+      setFormErrors([]);
+      setFormMessage(message);
+    } catch {
+      setFormErrors(["Could not save the project to the database."]);
+      setFormMessage("");
+    } finally {
+      setIsSyncing(false);
+    }
   }
 
-  function saveDraft() {
+  async function saveDraft() {
     const normalized = normalizeProject(draft);
 
     if (!normalized.name) {
@@ -219,13 +249,13 @@ function App() {
       }
     }
 
-    persistProject(
+    await persistProject(
       normalized,
-      normalized.publishState === "published" ? "Changes saved locally." : "Draft saved locally.",
+      normalized.publishState === "published" ? "Changes saved to database." : "Draft saved to database.",
     );
   }
 
-  function publishProject() {
+  async function publishProject() {
     const normalized = normalizeProject(draft);
     const validation = validateProjectForPublish(normalized);
 
@@ -235,7 +265,7 @@ function App() {
       return;
     }
 
-    persistProject(
+    await persistProject(
       {
         ...normalized,
         publishState: "published",
@@ -358,7 +388,12 @@ function App() {
           </div>
 
           <div className="project-list">
-            {filteredProjects.length === 0 ? (
+            {isLoadingProjects ? (
+              <div className="empty-state">
+                <FileText aria-hidden="true" size={28} />
+                <p>Loading projects...</p>
+              </div>
+            ) : filteredProjects.length === 0 ? (
               <div className="empty-state">
                 <FileText aria-hidden="true" size={28} />
                 <p>No projects match the current filters.</p>
@@ -402,14 +437,14 @@ function App() {
               <h2>{draft.name || "Untitled Ayuda"}</h2>
             </div>
             <div className="editor-actions">
-              <button className="button secondary" onClick={saveDraft} type="button">
+              <button className="button secondary" disabled={isSyncing} onClick={() => void saveDraft()} type="button">
                 <Save aria-hidden="true" size={18} />
                 {draft.publishState === "published" ? "Save Changes" : "Save Draft"}
               </button>
               <button
                 className="button primary"
-                disabled={draft.publishState === "published" || !publishValidation.isValid}
-                onClick={publishProject}
+                disabled={draft.publishState === "published" || !publishValidation.isValid || isSyncing}
+                onClick={() => void publishProject()}
                 type="button"
               >
                 <Send aria-hidden="true" size={18} />

@@ -71,7 +71,7 @@ function saveBookmarkIds(ids: string[]): void {
 }
 
 function UserApp() {
-  const [projects, setProjects] = useState<AyudaProject[]>(() => loadPublishedProjects());
+  const [projects, setProjects] = useState<AyudaProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ProjectStatus>("all");
@@ -79,18 +79,22 @@ function UserApp() {
   const [bookmarks, setBookmarks] = useState<Set<string>>(() => new Set(loadBookmarkIds()));
   const [eligibilityAnswers, setEligibilityAnswers] = useState<Record<string, Record<number, boolean>>>({});
   const [documentChecks, setDocumentChecks] = useState<Record<string, Record<number, boolean>>>({});
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    function refreshProjects() {
-      setProjects(loadPublishedProjects());
-    }
+    void refreshProjects();
 
-    const refreshTimer = window.setInterval(refreshProjects, 5000);
-    window.addEventListener("focus", refreshProjects);
+    const refreshTimer = window.setInterval(() => {
+      void refreshProjects();
+    }, 5000);
+    const handleFocus = () => {
+      void refreshProjects();
+    };
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       window.clearInterval(refreshTimer);
-      window.removeEventListener("focus", refreshProjects);
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
@@ -118,8 +122,14 @@ function UserApp() {
   const bookmarkedCount = projects.filter((project) => bookmarks.has(project.id)).length;
   const readyCount = projects.filter(isProjectReady).length;
 
-  function refreshProjects() {
-    setProjects(loadPublishedProjects());
+  async function refreshProjects() {
+    try {
+      setLoadError("");
+      const publishedProjects = await loadPublishedProjects();
+      setProjects(publishedProjects);
+    } catch {
+      setLoadError("Could not load published ayuda from the database.");
+    }
   }
 
   function toggleBookmark(projectId: string) {
@@ -168,12 +178,14 @@ function UserApp() {
           <Metric label="Available" value={projects.length} />
           <Metric label="Saved" value={bookmarkedCount} />
           <Metric label="Ready" value={readyCount} />
-          <button className="button ghost" onClick={refreshProjects} type="button">
+          <button className="button ghost" onClick={() => void refreshProjects()} type="button">
             <RefreshCw aria-hidden="true" size={18} />
             Refresh
           </button>
         </div>
       </header>
+
+      {loadError ? <div className="message error">{loadError}</div> : null}
 
       <main className="user-workspace">
         <aside className="project-panel user-list-panel" aria-label="Published ayuda projects">
