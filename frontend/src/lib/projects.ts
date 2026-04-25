@@ -1,7 +1,8 @@
 import type { AyudaProject, DependencyItem, ProjectStatus } from "../types";
 import { parseGoogleMapsPosition } from "./maps";
 
-export const PROJECTS_API_PATH = "/api/projects";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+export const PROJECTS_API_PATH = `${API_BASE}/api/projects`;
 
 export interface ValidationResult {
   isValid: boolean;

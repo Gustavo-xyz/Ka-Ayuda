@@ -1,8 +1,9 @@
 from __future__ import annotations
-
+import os
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 from .config import API_PORT
@@ -17,6 +18,9 @@ def create_app() -> Flask:
     ensure_schema()
 
     app = Flask(__name__, static_folder=None)
+
+    # Allow all origins for testing deployment
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     @app.get("/api/health")
     def health():
@@ -77,5 +81,6 @@ def create_app() -> Flask:
 
 if __name__ == "__main__":
     api = create_app()
-    print(f"Ayuda app listening on http://127.0.0.1:{API_PORT}")
-    api.run(host="127.0.0.1", port=API_PORT, debug=False, threaded=True)
+    port = int(os.environ.get("PORT", API_PORT))
+    print(f"Ayuda app listening on port {port}")
+    api.run(host="0.0.0.0", port=port, debug=False, threaded=True)

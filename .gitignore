@@ -5,6 +5,4 @@ __pycache__
 .DS_Store
 *.log
 node_modules
-dist
 frontend/node_modules
-frontend/dist
