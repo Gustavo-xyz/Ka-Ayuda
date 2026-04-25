@@ -441,6 +441,11 @@ button:disabled {
   color: #3f4d5c;
 }
 
+.distance-chip {
+  background: #eaf1ff;
+  color: var(--blue);
+}
+
 .readiness.blocked,
 .readiness-summary.blocked,
 .map-state.error {
@@ -718,6 +723,140 @@ button:disabled {
 
 .venue-actions strong {
   overflow-wrap: anywhere;
+}
+
+.venue-location-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.location-inline-button {
+  width: 100%;
+}
+
+.venue-location-status {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  min-height: 34px;
+  padding: 8px 10px;
+}
+
+.venue-location-status.ready {
+  background: #e7f6ee;
+  border-color: #b8e2c8;
+  color: var(--green);
+}
+
+.venue-location-status.neutral {
+  background: #f0f3f7;
+  color: #3f4d5c;
+}
+
+.venue-location-status.blocked {
+  background: #ffe9e7;
+  border-color: #f1b5b1;
+  color: var(--red);
+}
+
+.pin-journey {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.pin-node {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.pin-node.ready {
+  border-color: #9dc4f1;
+  box-shadow: inset 0 0 0 1px rgba(36, 87, 166, 0.08);
+}
+
+.pin-node.pending {
+  border-style: dashed;
+}
+
+.pin-node-title {
+  align-items: center;
+  color: var(--blue);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 800;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.pin-node strong {
+  font-size: 0.92rem;
+}
+
+.pin-node-address {
+  color: var(--muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.pin-meta {
+  color: #3f4d5c;
+  font-size: 0.76rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.pin-node-actions {
+  display: flex;
+  margin-top: 2px;
+}
+
+.pin-node-actions .button {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.pin-link {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.pin-link-line {
+  background: repeating-linear-gradient(to bottom, #6aa0de 0 6px, transparent 6px 10px);
+  border-radius: 999px;
+  height: 26px;
+  width: 2px;
+}
+
+.pin-link-label {
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  min-height: 24px;
+  padding: 4px 10px;
+}
+
+.pin-link.ready .pin-link-label {
+  background: #e7f6ee;
+  color: var(--green);
+}
+
+.pin-link.neutral .pin-link-label {
+  background: #f0f3f7;
+  color: #3f4d5c;
+}
+
+.pin-link.blocked .pin-link-label {
+  background: #ffe9e7;
+  color: var(--red);
 }
 
 .user-checklist {

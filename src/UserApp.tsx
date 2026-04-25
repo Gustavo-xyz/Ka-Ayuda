@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   FileText,
   ListChecks,
+  LocateFixed,
   MapPin,
   Navigation,
   Search,
@@ -13,12 +14,21 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { loadPublishedProjects } from "./lib/projects";
-import { createGoogleMapsEmbedUrl } from "./lib/maps";
+import { createGoogleMapsEmbedUrl, createGoogleMapsUrl, hasCoordinates } from "./lib/maps";
+import {
+  createDistanceDetailState,
+  getLocationButtonLabel,
+  getLocationStatusMessage,
+  getProjectDistanceLabel,
+  requestUserLocation,
+  type UserLocationStatus,
+} from "./lib/userLocation";
 import type { AyudaProject, ProjectStatus } from "./types";
 
 type PublishedStatusFilter = "all" | Extract<ProjectStatus, "upcoming" | "active">;
 type CityFilter = "all" | string;
 type BeneficiaryFilter = "all" | string;
+type UserCoordinates = { accuracyMeters?: number; lat: number; lng: number };
 
 interface CityFilterOption {
   label: string;
@@ -160,6 +170,30 @@ function createDescriptionPreview(value: string, maxLength = 180): string {
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
 }
 
+function formatCoordinateLabel(value: UserCoordinates): string {
+  return `${value.lat.toFixed(7)}, ${value.lng.toFixed(7)}`;
+}
+
+function formatAccuracyLabel(accuracyMeters: number | undefined): string {
+  if (typeof accuracyMeters !== "number" || !Number.isFinite(accuracyMeters) || accuracyMeters <= 0) {
+    return "";
+  }
+
+  return `Accuracy ±${Math.round(accuracyMeters)} m`;
+}
+
+function getLocationTone(status: UserLocationStatus): "ready" | "neutral" | "blocked" {
+  if (status === "granted") {
+    return "ready";
+  }
+
+  if (status === "denied" || status === "error" || status === "unsupported") {
+    return "blocked";
+  }
+
+  return "neutral";
+}
+
 function UserApp() {
   const [projects, setProjects] = useState<AyudaProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -171,6 +205,9 @@ function UserApp() {
   const [documentChecks, setDocumentChecks] = useState<Record<string, Record<number, boolean>>>({});
   const [descriptionDialogProject, setDescriptionDialogProject] = useState<AyudaProject | null>(null);
   const [loadError, setLoadError] = useState("");
+  const [userLocation, setUserLocation] = useState<UserCoordinates | null>(null);
+  const [userLocationStatus, setUserLocationStatus] = useState<UserLocationStatus>("idle");
+  const [userLocationError, setUserLocationError] = useState("");
 
   useEffect(() => {
     void refreshProjects();
@@ -206,6 +243,14 @@ function UserApp() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [descriptionDialogProject]);
+
+  useEffect(() => {
+    if (userLocationStatus !== "idle") {
+      return;
+    }
+
+    void handleUseMyLocation();
+  }, [userLocationStatus]);
 
   const cityFilterOptions = useMemo<CityFilterOption[]>(() => {
     const cityMap = new Map<string, string>();
@@ -311,6 +356,8 @@ function UserApp() {
 
   const activeProjects = projects.filter((project) => project.status === "active").length;
   const upcomingProjects = projects.filter((project) => project.status === "upcoming").length;
+  const locationStatusMessage = getLocationStatusMessage(userLocationStatus, userLocationError);
+  const locationButtonLabel = getLocationButtonLabel(userLocationStatus);
 
   async function refreshProjects() {
     try {
@@ -320,6 +367,24 @@ function UserApp() {
     } catch {
       setLoadError("Could not load published ayuda from the database.");
     }
+  }
+
+  async function handleUseMyLocation() {
+    setUserLocationStatus("requesting");
+    setUserLocationError("");
+
+    const result = await requestUserLocation(window.navigator.geolocation);
+
+    if (result.status === "granted") {
+      setUserLocation(result.position);
+      setUserLocationStatus("granted");
+      setUserLocationError("");
+      return;
+    }
+
+    setUserLocation(null);
+    setUserLocationStatus(result.status);
+    setUserLocationError(result.errorMessage);
   }
 
   function updateEligibility(projectId: string, index: number, value: boolean) {
@@ -417,6 +482,7 @@ function UserApp() {
             ) : (
               filteredProjects.map((project) => {
                 const isSelected = selectedProject?.id === project.id;
+                const distanceLabel = getProjectDistanceLabel(userLocation, project.location);
 
                 return (
                   <button
@@ -438,6 +504,7 @@ function UserApp() {
                       </span>
                     </span>
                     <span className="project-row-meta">
+                      {distanceLabel ? <span className="badge distance-chip">{distanceLabel} away</span> : null}
                       <span className={`badge status-${project.status}`}>{statusLabels[project.status]}</span>
                     </span>
                   </button>
@@ -454,8 +521,14 @@ function UserApp() {
               eligibilityAnswers={eligibilityAnswers[selectedProject.id] ?? {}}
               onDocumentCheck={(index, value) => updateDocumentCheck(selectedProject.id, index, value)}
               onEligibilityCheck={(index, value) => updateEligibility(selectedProject.id, index, value)}
+              locationButtonLabel={locationButtonLabel}
+              locationError={userLocationError}
+              locationStatusMessage={locationStatusMessage}
+              locationStatus={userLocationStatus}
+              onUseMyLocation={handleUseMyLocation}
               onViewDescription={() => setDescriptionDialogProject(selectedProject)}
               project={selectedProject}
+              userLocation={userLocation}
             />
           ) : (
             <div className="empty-state user-empty-detail">
@@ -488,19 +561,31 @@ function Metric({ label, value }: MetricProps) {
 interface AyudaDetailsProps {
   documentChecks: Record<number, boolean>;
   eligibilityAnswers: Record<number, boolean>;
+  locationButtonLabel: string;
+  locationError: string;
+  locationStatusMessage: string;
+  locationStatus: UserLocationStatus;
   onDocumentCheck: (index: number, value: boolean) => void;
   onEligibilityCheck: (index: number, value: boolean) => void;
+  onUseMyLocation: () => Promise<void>;
   onViewDescription: () => void;
   project: AyudaProject;
+  userLocation: UserCoordinates | null;
 }
 
 function AyudaDetails({
   documentChecks,
   eligibilityAnswers,
+  locationButtonLabel,
+  locationError,
+  locationStatusMessage,
+  locationStatus,
   onDocumentCheck,
   onEligibilityCheck,
+  onUseMyLocation,
   onViewDescription,
   project,
+  userLocation,
 }: AyudaDetailsProps) {
   const eligibilityTouched = Object.keys(eligibilityAnswers).length > 0;
   const eligible =
@@ -509,6 +594,15 @@ function AyudaDetails({
     project.requirements.length > 0 && project.requirements.every((_, index) => documentChecks[index] === true);
   const embedUrl = createGoogleMapsEmbedUrl(project.location);
   const description = project.description.trim();
+  const distanceState = createDistanceDetailState(userLocation, project.location, locationStatus, locationError);
+  const locationTone = getLocationTone(locationStatus);
+  const userLocationLabel = userLocation ? formatCoordinateLabel(userLocation) : "Tap Use my location to pin your position.";
+  const userAccuracyLabel = userLocation ? formatAccuracyLabel(userLocation.accuracyMeters) : "";
+  const userMapUrl = userLocation ? createGoogleMapsUrl({ lat: userLocation.lat, lng: userLocation.lng }) : "";
+  const venueLabel = project.location.city?.trim() ? project.location.city : "City not specified";
+  const venueCoordinateLabel = hasCoordinates(project.location)
+    ? `${project.location.lat.toFixed(7)}, ${project.location.lng.toFixed(7)}`
+    : "Venue coordinates unavailable";
 
   return (
     <>
@@ -556,6 +650,49 @@ function AyudaDetails({
                   Open Map
                 </a>
               ) : null}
+              <div className="venue-location-controls">
+                <button
+                  className="button secondary location-inline-button"
+                  disabled={locationStatus === "requesting"}
+                  onClick={() => void onUseMyLocation()}
+                  type="button"
+                >
+                  {locationButtonLabel}
+                </button>
+                <span className={`venue-location-status ${locationTone}`}>{locationStatusMessage}</span>
+              </div>
+              <div className="pin-journey" aria-label="Location pins from your location to venue">
+                <article className={`pin-node ${userLocation ? "ready" : "pending"}`}>
+                  <span className="pin-node-title">
+                    <LocateFixed aria-hidden="true" size={15} />
+                    Your Pin
+                  </span>
+                  <strong>{userLocation ? "Current location" : "Your location not set"}</strong>
+                  <span className="pin-node-address">{userLocationLabel}</span>
+                  {userAccuracyLabel ? <span className="pin-meta">{userAccuracyLabel}</span> : null}
+                  {userMapUrl ? (
+                    <div className="pin-node-actions">
+                      <a className="button link-button" href={userMapUrl} rel="noreferrer" target="_blank">
+                        <MapPin aria-hidden="true" size={15} />
+                        Open My Pin
+                      </a>
+                    </div>
+                  ) : null}
+                </article>
+                <div className={`pin-link ${distanceState.tone}`}>
+                  <span className="pin-link-line" />
+                  <span className="pin-link-label">{distanceState.value}</span>
+                </div>
+                <article className={`pin-node ${project.location.address ? "ready" : "pending"}`}>
+                  <span className="pin-node-title">
+                    <MapPin aria-hidden="true" size={15} />
+                    Venue Pin
+                  </span>
+                  <strong>{project.location.address || "Venue to be announced"}</strong>
+                  <span className="pin-node-address">{venueLabel}</span>
+                  <span className="pin-meta">{venueCoordinateLabel}</span>
+                </article>
+              </div>
             </div>
             <div className="map-preview">
               {embedUrl ? (
