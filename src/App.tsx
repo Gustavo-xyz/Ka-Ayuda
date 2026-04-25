@@ -49,6 +49,8 @@ const publishLabels: Record<PublishState, string> = {
   published: "Published",
 };
 
+const DEFAULT_MAP_CENTER = { lat: 14.5995, lng: 120.9842 };
+
 let googleMapsPromise: Promise<any> | null = null;
 
 function loadGoogleMaps(apiKey: string): Promise<any> {
@@ -101,6 +103,10 @@ function formatDateTime(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function createMapsSearchUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }
 
 function normalizeProject(project: AyudaProject): AyudaProject {
@@ -771,17 +777,12 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
   }, [location.mapsUrl, mapsState, onChange]);
 
   useEffect(() => {
-    if (
-      mapsState !== "ready" ||
-      !mapRef.current ||
-      !window.google?.maps ||
-      location.lat == null ||
-      location.lng == null
-    ) {
+    if (mapsState !== "ready" || !mapRef.current || !window.google?.maps) {
       return;
     }
 
-    const center = { lat: location.lat, lng: location.lng };
+    const hasLocation = location.lat != null && location.lng != null;
+    const center = hasLocation ? { lat: location.lat!, lng: location.lng! } : DEFAULT_MAP_CENTER;
 
     if (!mapInstanceRef.current) {
       mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
@@ -794,15 +795,41 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
       mapInstanceRef.current.setCenter(center);
     }
 
-    if (!markerRef.current) {
+    if (hasLocation && !markerRef.current) {
       markerRef.current = new window.google.maps.Marker({
         map: mapInstanceRef.current,
         position: center,
       });
-    } else {
+    } else if (hasLocation) {
+      markerRef.current.setMap(mapInstanceRef.current);
       markerRef.current.setPosition(center);
+    } else if (markerRef.current) {
+      markerRef.current.setMap(null);
     }
-  }, [location.lat, location.lng, mapsState]);
+
+    const clickListener = mapInstanceRef.current.addListener("click", (event: any) => {
+      if (!event.latLng) {
+        return;
+      }
+
+      const clickedPos = {
+        lat: event.latLng.lat(),
+        lng: event.latLng.lng(),
+      };
+
+      onChange({
+        ...location,
+        lat: clickedPos.lat,
+        lng: clickedPos.lng,
+        placeId: undefined,
+        mapsUrl: createMapsSearchUrl(clickedPos.lat, clickedPos.lng),
+      });
+
+      console.log(`Clicked at: ${clickedPos.lat}, ${clickedPos.lng}`);
+    });
+
+    return () => clickListener.remove();
+  }, [location, mapsState, onChange]);
 
   return (
     <div className="location-grid">
@@ -843,7 +870,7 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
         </div>
       </div>
       <div className="map-preview" ref={mapRef}>
-        {mapsState !== "ready" || location.lat == null || location.lng == null ? (
+        {mapsState !== "ready" ? (
           <div>
             <MapPin aria-hidden="true" size={28} />
             <span>{location.address || "No venue selected"}</span>

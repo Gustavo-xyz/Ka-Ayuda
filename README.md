@@ -2,31 +2,22 @@
 
 MVP for creating, publishing, browsing, and tracking ayuda announcements.
 
+## Stack
+
+- Python 3.11+
+- Flask API
+- React frontend served as static files by Flask
+- Local MySQL database through XAMPP
+
 ## Local Setup
 
-```bash
-npm.cmd install
-npm.cmd run dev
-npm.cmd run dev:user
-```
-
-Populate full-feature mock database records:
+Install Python dependencies:
 
 ```bash
-npm.cmd run seed:db
+python -m pip install -r requirements.txt
 ```
 
-Run database verification checks repeatedly:
-
-```bash
-npm.cmd run test:db:repeat
-```
-
-API server runs at `http://127.0.0.1:3001/`.
-Admin runs at `http://127.0.0.1:5173/`.
-User side runs at `http://127.0.0.1:5174/`.
-
-Create a `.env` file (or update existing) with database values for XAMPP:
+Create a `.env` file with your XAMPP/MySQL values:
 
 ```bash
 API_PORT=3001
@@ -37,9 +28,32 @@ DB_PASSWORD=
 DB_NAME=ayuda
 ```
 
+Populate full-feature mock database records:
+
+```bash
+python -m server.seed
+```
+
+Run database verification checks:
+
+```bash
+python -m server.verify_seed
+python -m server.verify_seed --repeat=25
+```
+
+Start the app:
+
+```bash
+python -m server.app
+```
+
+App URLs:
+
+- Admin: `http://127.0.0.1:3001/`
+- User side: `http://127.0.0.1:3001/user`
+- API health: `http://127.0.0.1:3001/api/health`
+
 Default mock credentials:
 
 - Username: `admin`
 - Password: `admin123`
-
-Google Maps is enabled by adding `VITE_GOOGLE_MAPS_API_KEY` to `.env.local`. Without it, the location field falls back to manual address entry.
