@@ -172,10 +172,12 @@ async function requestProjects<T>(
   options: RequestInit,
   fetchFn: typeof fetch = fetch,
 ): Promise<T> {
+  const method = typeof options.method === "string" ? options.method.toUpperCase() : "GET";
   const response = await fetchFn(path, {
     headers: {
       "Content-Type": "application/json",
     },
+    cache: method === "GET" ? "no-store" : options.cache,
     ...options,
   });
 

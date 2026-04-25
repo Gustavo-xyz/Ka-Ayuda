@@ -18,8 +18,14 @@ import type { AyudaProject, ProjectStatus } from "./types";
 
 type PublishedStatusFilter = "all" | Extract<ProjectStatus, "upcoming" | "active">;
 type CityFilter = "all" | string;
+type BeneficiaryFilter = "all" | string;
 
 interface CityFilterOption {
+  label: string;
+  value: string;
+}
+
+interface BeneficiaryFilterOption {
   label: string;
   value: string;
 }
@@ -160,6 +166,7 @@ function UserApp() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<PublishedStatusFilter>("all");
   const [cityFilter, setCityFilter] = useState<CityFilter>("all");
+  const [beneficiaryFilter, setBeneficiaryFilter] = useState<BeneficiaryFilter>("all");
   const [eligibilityAnswers, setEligibilityAnswers] = useState<Record<string, Record<number, boolean>>>({});
   const [documentChecks, setDocumentChecks] = useState<Record<string, Record<number, boolean>>>({});
   const [descriptionDialogProject, setDescriptionDialogProject] = useState<AyudaProject | null>(null);
@@ -226,6 +233,32 @@ function UserApp() {
       .sort((first, second) => first.label.localeCompare(second.label, "en", { sensitivity: "base" }));
   }, [projects]);
 
+  const beneficiaryFilterOptions = useMemo<BeneficiaryFilterOption[]>(() => {
+    const beneficiaryMap = new Map<string, string>();
+
+    for (const project of projects) {
+      if (project.status !== "upcoming" && project.status !== "active") {
+        continue;
+      }
+
+      const beneficiary = project.beneficiaryTarget.trim();
+
+      if (!beneficiary) {
+        continue;
+      }
+
+      const key = beneficiary.toLowerCase();
+
+      if (!beneficiaryMap.has(key)) {
+        beneficiaryMap.set(key, beneficiary);
+      }
+    }
+
+    return [...beneficiaryMap.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((first, second) => first.label.localeCompare(second.label, "en", { sensitivity: "base" }));
+  }, [projects]);
+
   useEffect(() => {
     if (cityFilter === "all") {
       return;
@@ -237,6 +270,18 @@ function UserApp() {
       setCityFilter("all");
     }
   }, [cityFilter, cityFilterOptions]);
+
+  useEffect(() => {
+    if (beneficiaryFilter === "all") {
+      return;
+    }
+
+    const hasOption = beneficiaryFilterOptions.some((option) => option.value === beneficiaryFilter);
+
+    if (!hasOption) {
+      setBeneficiaryFilter("all");
+    }
+  }, [beneficiaryFilter, beneficiaryFilterOptions]);
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -253,10 +298,12 @@ function UserApp() {
       const matchesStatus =
         statusFilter === "all" ? project.status === "upcoming" || project.status === "active" : project.status === statusFilter;
       const matchesCity = cityFilter === "all" || (project.location.city ?? "").trim().toLowerCase() === cityFilter;
+      const matchesBeneficiary =
+        beneficiaryFilter === "all" || project.beneficiaryTarget.trim().toLowerCase() === beneficiaryFilter;
 
-      return matchesQuery && matchesStatus && matchesCity;
+      return matchesQuery && matchesStatus && matchesCity && matchesBeneficiary;
     });
-  }, [projects, query, statusFilter, cityFilter]);
+  }, [projects, query, statusFilter, cityFilter, beneficiaryFilter]);
 
   const selectedProject = useMemo(() => {
     return filteredProjects.find((project) => project.id === selectedProjectId) ?? filteredProjects[0] ?? null;
@@ -342,6 +389,18 @@ function UserApp() {
             <select aria-label="Published ayuda city" onChange={(event) => setCityFilter(event.target.value)} value={cityFilter}>
               <option value="all">All Cities</option>
               {cityFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Published ayuda beneficiary"
+              onChange={(event) => setBeneficiaryFilter(event.target.value)}
+              value={beneficiaryFilter}
+            >
+              <option value="all">All Beneficiaries</option>
+              {beneficiaryFilterOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -472,17 +531,6 @@ function AyudaDetails({
           </div>
         </section>
 
-        <section className="detail-section wide">
-          <div className="section-heading">
-            <FileText aria-hidden="true" size={18} />
-            <h3>Description</h3>
-          </div>
-          <p className="muted-text">{createDescriptionPreview(description) || "No description posted yet."}</p>
-          <button className="button secondary" disabled={!description} onClick={onViewDescription} type="button">
-            View Description
-          </button>
-        </section>
-
         <section className="detail-section">
           <div className="section-heading">
             <Users aria-hidden="true" size={18} />
@@ -526,6 +574,17 @@ function AyudaDetails({
               )}
             </div>
           </div>
+        </section>
+
+        <section className="detail-section wide">
+          <div className="section-heading">
+            <FileText aria-hidden="true" size={18} />
+            <h3>Description</h3>
+          </div>
+          <p className="muted-text">{createDescriptionPreview(description) || "No description posted yet."}</p>
+          <button className="button secondary" disabled={!description} onClick={onViewDescription} type="button">
+            View Description
+          </button>
         </section>
 
         <section className="detail-section">

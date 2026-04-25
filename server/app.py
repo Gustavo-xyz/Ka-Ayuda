@@ -45,6 +45,15 @@ def create_app() -> Flask:
         deleted = delete_project(project_id)
         return jsonify({"deleted": deleted})
 
+    @app.after_request
+    def disable_api_cache(response):
+        if request.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+
+        return response
+
     @app.get("/assets/<path:filename>")
     def frontend_assets(filename: str):
         return send_from_directory(ASSETS_DIR, filename)

@@ -573,16 +573,6 @@ function App() {
                   />
                 </label>
 
-                <label className="field full">
-                  <span>Description</span>
-                  <textarea
-                    onChange={(event) => updateDraftField("description", event.target.value)}
-                    placeholder="Add announcement details for beneficiaries."
-                    rows={3}
-                    value={draft.description}
-                  />
-                </label>
-
                 <label className="field">
                   <span>Start Date & Time</span>
                   <input
@@ -629,6 +619,22 @@ function App() {
                 location={draft.location}
                 onChange={(location) => updateDraftField("location", location)}
               />
+            </section>
+
+            <section className="form-section wide">
+              <div className="section-heading">
+                <FileText aria-hidden="true" size={18} />
+                <h3>Description</h3>
+              </div>
+              <label className="field full">
+                <span>Details</span>
+                <textarea
+                  onChange={(event) => updateDraftField("description", event.target.value)}
+                  placeholder="Add announcement details for beneficiaries."
+                  rows={3}
+                  value={draft.description}
+                />
+              </label>
             </section>
 
             <section className="form-section">

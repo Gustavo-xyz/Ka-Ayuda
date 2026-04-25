@@ -112,7 +112,17 @@ describe("project helpers", () => {
   });
 
   it("posts a single project to store it", async () => {
-    const project = createProject();
+    const project = createProject({
+      description: " Assistance details for residents. ",
+      location: {
+        address: "Municipal Hall",
+        city: " Manila ",
+        placeId: undefined,
+        lat: undefined,
+        lng: undefined,
+        mapsUrl: "",
+      },
+    });
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(project));
 
     const saved = await saveProject(project, fetchMock as unknown as typeof fetch);
@@ -124,9 +134,19 @@ describe("project helpers", () => {
     expect(JSON.parse(init.body as string)).toMatchObject({
       id: project.id,
       name: project.name,
+      description: "Assistance details for residents.",
+      location: expect.objectContaining({
+        city: "Manila",
+      }),
       publishState: project.publishState,
     });
-    expect(saved).toEqual(project);
+    expect(saved).toMatchObject({
+      ...project,
+      description: "Assistance details for residents.",
+      location: expect.objectContaining({
+        city: "Manila",
+      }),
+    });
   });
 
   it("stores multiple projects by posting each one", async () => {
