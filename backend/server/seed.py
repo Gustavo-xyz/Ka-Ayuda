@@ -1,7 +1,17 @@
 from __future__ import annotations
 
-from .db import ensure_schema, get_connection, to_sql_datetime
+from .db import LEGACY_STATUS_MAP, PROJECT_STATUSES, ensure_schema, get_connection, to_sql_datetime
 from .mock_projects import MOCK_PROJECTS
+
+
+def _normalize_seed_status(value: object) -> str:
+    if isinstance(value, str):
+        status = LEGACY_STATUS_MAP.get(value.strip(), value.strip())
+
+        if status in PROJECT_STATUSES:
+            return status
+
+    return "upcoming"
 
 
 def main() -> None:
@@ -56,8 +66,8 @@ def main() -> None:
                         to_sql_datetime(project["schedule"]),
                         to_sql_datetime(project.get("scheduleEnd", "")),
                         project["beneficiaryTarget"],
-                        project["publishState"],
-                        project["status"],
+                        "published" if project.get("publishState") == "published" else "draft",
+                        _normalize_seed_status(project.get("status")),
                         project["statusNote"],
                         to_sql_datetime(project["createdAt"]),
                         to_sql_datetime(project["updatedAt"]),

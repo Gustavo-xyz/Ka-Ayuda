@@ -190,8 +190,9 @@ function App() {
   const [draft, setDraft] = useState<AyudaProject>(() => createEmptyProject());
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus>("active");
-  const [readinessFilter, setReadinessFilter] = useState<"all" | "ready" | "not-ready">("all");
+  const [statusFilter, setStatusFilter] = useState<"" | ProjectStatus>("");
+  const [publishStateFilter, setPublishStateFilter] = useState<"" | PublishState>("");
+  const [readinessFilter, setReadinessFilter] = useState<"" | "ready" | "not-ready">("");
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [formMessage, setFormMessage] = useState("");
   const [newDependencyLabel, setNewDependencyLabel] = useState("");
@@ -216,16 +217,17 @@ function App() {
         project.description.toLowerCase().includes(normalizedQuery) ||
         project.location.address.toLowerCase().includes(normalizedQuery) ||
         (project.location.city ?? "").toLowerCase().includes(normalizedQuery);
-      const matchesStatus = project.status === statusFilter;
+      const matchesStatus = !statusFilter || project.status === statusFilter;
+      const matchesPublishState = !publishStateFilter || project.publishState === publishStateFilter;
       const ready = isProjectReady(project);
       const matchesReadiness =
-        readinessFilter === "all" ||
+        !readinessFilter ||
         (readinessFilter === "ready" && ready) ||
         (readinessFilter === "not-ready" && !ready);
 
-      return matchesQuery && matchesStatus && matchesReadiness;
+      return matchesQuery && matchesStatus && matchesPublishState && matchesReadiness;
     });
-  }, [projects, query, readinessFilter, statusFilter]);
+  }, [projects, publishStateFilter, query, readinessFilter, statusFilter]);
 
   const publishValidation = useMemo(() => validateProjectForPublish(normalizeProject(draft)), [draft]);
   const draftIsSaved = projects.some((project) => project.id === draft.id);
@@ -454,19 +456,29 @@ function App() {
           <div className="filters" aria-label="Project filters">
             <select
               aria-label="Status filter"
-              onChange={(event) => setStatusFilter(event.target.value as ProjectStatus)}
+              onChange={(event) => setStatusFilter(event.target.value as "" | ProjectStatus)}
               value={statusFilter}
             >
+              <option value="">Select Status</option>
               <option value="active">Active</option>
               <option value="upcoming">Upcoming</option>
               <option value="archived">Archived</option>
             </select>
             <select
+              aria-label="Publish state filter"
+              onChange={(event) => setPublishStateFilter(event.target.value as "" | PublishState)}
+              value={publishStateFilter}
+            >
+              <option value="">Select Publication</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+            </select>
+            <select
               aria-label="Readiness filter"
-              onChange={(event) => setReadinessFilter(event.target.value as "all" | "ready" | "not-ready")}
+              onChange={(event) => setReadinessFilter(event.target.value as "" | "ready" | "not-ready")}
               value={readinessFilter}
             >
-              <option value="all">All</option>
+              <option value="">Select Completion</option>
               <option value="ready">Ready</option>
               <option value="not-ready">Missing items</option>
             </select>
@@ -738,6 +750,17 @@ function App() {
                     <option value="active">Active</option>
                     <option value="upcoming">Upcoming</option>
                     <option value="archived">Archived</option>
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Publish State</span>
+                  <select
+                    onChange={(event) => updateDraftField("publishState", event.target.value as PublishState)}
+                    value={draft.publishState}
+                  >
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
                   </select>
                 </label>
 

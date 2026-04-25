@@ -419,6 +419,16 @@ def ensure_schema() -> None:
                 "ALTER TABLE projects MODIFY status "
                 "ENUM('upcoming', 'active', 'archived') NOT NULL DEFAULT 'upcoming'"
             )
+            cursor.execute("UPDATE projects SET status = 'upcoming' WHERE status IS NULL OR status = ''")
+            cursor.execute(
+                """
+                UPDATE projects
+                SET publish_state = 'draft'
+                WHERE publish_state IS NULL
+                  OR publish_state = ''
+                  OR publish_state NOT IN ('draft', 'published')
+                """
+            )
         connection.commit()
     finally:
         connection.close()

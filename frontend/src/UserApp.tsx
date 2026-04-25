@@ -25,9 +25,9 @@ import {
 } from "./lib/userLocation";
 import type { AyudaProject, ProjectStatus } from "./types";
 
-type PublishedStatusFilter = "all" | Extract<ProjectStatus, "upcoming" | "active">;
-type CityFilter = "all" | string;
-type BeneficiaryFilter = "all" | string;
+type PublishedStatusFilter = "" | Extract<ProjectStatus, "upcoming" | "active">;
+type CityFilter = "" | string;
+type BeneficiaryFilter = "" | string;
 type UserCoordinates = { accuracyMeters?: number; lat: number; lng: number };
 
 interface CityFilterOption {
@@ -198,9 +198,9 @@ function UserApp() {
   const [projects, setProjects] = useState<AyudaProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<PublishedStatusFilter>("all");
-  const [cityFilter, setCityFilter] = useState<CityFilter>("all");
-  const [beneficiaryFilter, setBeneficiaryFilter] = useState<BeneficiaryFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<PublishedStatusFilter>("");
+  const [cityFilter, setCityFilter] = useState<CityFilter>("");
+  const [beneficiaryFilter, setBeneficiaryFilter] = useState<BeneficiaryFilter>("");
   const [eligibilityAnswers, setEligibilityAnswers] = useState<Record<string, Record<number, boolean>>>({});
   const [documentChecks, setDocumentChecks] = useState<Record<string, Record<number, boolean>>>({});
   const [descriptionDialogProject, setDescriptionDialogProject] = useState<AyudaProject | null>(null);
@@ -305,26 +305,26 @@ function UserApp() {
   }, [projects]);
 
   useEffect(() => {
-    if (cityFilter === "all") {
+    if (!cityFilter) {
       return;
     }
 
     const hasOption = cityFilterOptions.some((option) => option.value === cityFilter);
 
     if (!hasOption) {
-      setCityFilter("all");
+      setCityFilter("");
     }
   }, [cityFilter, cityFilterOptions]);
 
   useEffect(() => {
-    if (beneficiaryFilter === "all") {
+    if (!beneficiaryFilter) {
       return;
     }
 
     const hasOption = beneficiaryFilterOptions.some((option) => option.value === beneficiaryFilter);
 
     if (!hasOption) {
-      setBeneficiaryFilter("all");
+      setBeneficiaryFilter("");
     }
   }, [beneficiaryFilter, beneficiaryFilterOptions]);
 
@@ -341,10 +341,9 @@ function UserApp() {
         project.requirements.some((requirement) => requirement.toLowerCase().includes(normalizedQuery)) ||
         project.eligibility.some((rule) => rule.toLowerCase().includes(normalizedQuery));
       const matchesStatus =
-        statusFilter === "all" ? project.status === "upcoming" || project.status === "active" : project.status === statusFilter;
-      const matchesCity = cityFilter === "all" || (project.location.city ?? "").trim().toLowerCase() === cityFilter;
-      const matchesBeneficiary =
-        beneficiaryFilter === "all" || project.beneficiaryTarget.trim().toLowerCase() === beneficiaryFilter;
+        !statusFilter ? project.status === "upcoming" || project.status === "active" : project.status === statusFilter;
+      const matchesCity = !cityFilter || (project.location.city ?? "").trim().toLowerCase() === cityFilter;
+      const matchesBeneficiary = !beneficiaryFilter || project.beneficiaryTarget.trim().toLowerCase() === beneficiaryFilter;
 
       return matchesQuery && matchesStatus && matchesCity && matchesBeneficiary;
     });
@@ -447,12 +446,12 @@ function UserApp() {
               onChange={(event) => setStatusFilter(event.target.value as PublishedStatusFilter)}
               value={statusFilter}
             >
-              <option value="all">All</option>
+              <option value="">Select Status</option>
               <option value="upcoming">Upcoming</option>
               <option value="active">Active</option>
             </select>
             <select aria-label="Published ayuda city" onChange={(event) => setCityFilter(event.target.value)} value={cityFilter}>
-              <option value="all">All Cities</option>
+              <option value="">Select City</option>
               {cityFilterOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -464,7 +463,7 @@ function UserApp() {
               onChange={(event) => setBeneficiaryFilter(event.target.value)}
               value={beneficiaryFilter}
             >
-              <option value="all">All Beneficiaries</option>
+              <option value="">Select Beneficiary</option>
               {beneficiaryFilterOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
