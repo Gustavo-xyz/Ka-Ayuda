@@ -1,4 +1,5 @@
 import type { AyudaProject, DependencyItem, ProjectStatus } from "../types";
+import { parseGoogleMapsPosition } from "./maps";
 
 export const PROJECTS_API_PATH = "/api/projects";
 
@@ -25,7 +26,13 @@ function normalizeBeneficiaryClassification(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isNumericOnly(value: string): boolean {
+  return /^\d+(\.\d+)?$/.test(value.trim());
+}
+
 function normalizeProject(project: AyudaProject): AyudaProject {
+  const mapPosition = parseGoogleMapsPosition(project.location?.mapsUrl);
+
   return {
     ...project,
     name: typeof project.name === "string" ? project.name : "",
@@ -38,8 +45,8 @@ function normalizeProject(project: AyudaProject): AyudaProject {
     location: {
       address: project.location?.address ?? "",
       placeId: project.location?.placeId,
-      lat: project.location?.lat,
-      lng: project.location?.lng,
+      lat: project.location?.lat ?? mapPosition?.lat,
+      lng: project.location?.lng ?? mapPosition?.lng,
       mapsUrl: project.location?.mapsUrl ?? "",
     },
     schedule: project.schedule ?? "",
@@ -124,6 +131,8 @@ export function validateProjectForPublish(project: AyudaProject): ValidationResu
 
   if (!project.beneficiaryTarget.trim()) {
     errors.push("Beneficiary classification is required.");
+  } else if (isNumericOnly(project.beneficiaryTarget)) {
+    errors.push("Beneficiary target must be a classification, not a number.");
   }
 
   if (project.requirements.filter(Boolean).length === 0) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -104,6 +105,31 @@ def _normalize_beneficiary_target(value: Any) -> str:
     return ""
 
 
+def _parse_google_maps_position(value: Any) -> tuple[float, float] | None:
+    if not isinstance(value, str):
+        return None
+
+    patterns = [
+        r"@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)",
+        r"[?&]q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)",
+        r"[?&]query=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, value)
+
+        if not match:
+            continue
+
+        lat = float(match.group(1))
+        lng = float(match.group(2))
+
+        if math.isfinite(lat) and math.isfinite(lng):
+            return (lat, lng)
+
+    return None
+
+
 def to_sql_datetime(value: Any) -> str | None:
     parsed = _parse_datetime(value)
 
@@ -203,10 +229,13 @@ def normalize_project_payload(input_data: Any) -> dict[str, Any]:
     address = location.get("address")
     place_id = location.get("placeId")
     maps_url = location.get("mapsUrl")
+    parsed_position = _parse_google_maps_position(maps_url)
     schedule = payload.get("schedule")
     beneficiary_target = payload.get("beneficiaryTarget")
     status_note = payload.get("statusNote")
     created_at = payload.get("createdAt")
+    lat = float(location.get("lat")) if _is_finite_number(location.get("lat")) else parsed_position[0] if parsed_position else None
+    lng = float(location.get("lng")) if _is_finite_number(location.get("lng")) else parsed_position[1] if parsed_position else None
 
     return {
         "id": normalized_id,
@@ -216,8 +245,8 @@ def normalize_project_payload(input_data: Any) -> dict[str, Any]:
         "location": {
             "address": address.strip() if isinstance(address, str) else "",
             "placeId": place_id.strip() if isinstance(place_id, str) and place_id.strip() else None,
-            "lat": float(location.get("lat")) if _is_finite_number(location.get("lat")) else None,
-            "lng": float(location.get("lng")) if _is_finite_number(location.get("lng")) else None,
+            "lat": lat,
+            "lng": lng,
             "mapsUrl": maps_url.strip() if isinstance(maps_url, str) else "",
         },
         "schedule": schedule if isinstance(schedule, str) else "",
@@ -479,6 +508,12 @@ def list_projects(*, published_only: bool = False, project_ids: list[str] | None
 
         if row.get("lng") is not None:
             location["lng"] = _decimal_to_float(row["lng"])
+
+        if "lat" not in location or "lng" not in location:
+            parsed_position = _parse_google_maps_position(row.get("maps_url"))
+
+            if parsed_position:
+                location["lat"], location["lng"] = parsed_position
 
         status = _normalize_status(row.get("status"))
 

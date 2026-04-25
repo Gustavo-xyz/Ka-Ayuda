@@ -15,7 +15,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { loadPublishedProjects } from "./lib/projects";
 import { createGoogleMapsEmbedUrl } from "./lib/maps";
 import type { AyudaProject, ProjectStatus } from "./types";

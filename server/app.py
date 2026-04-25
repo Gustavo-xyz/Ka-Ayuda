@@ -27,6 +27,14 @@ def create_app() -> Flask:
         published_only = request.args.get("published") in {"true", "1"}
         return jsonify(list_projects(published_only=published_only))
 
+    @app.get("/favicon.ico")
+    def favicon():
+        return "", 204
+
+    @app.get("/.well-known/appspecific/com.chrome.devtools.json")
+    def chrome_devtools_metadata():
+        return jsonify({})
+
     @app.post("/api/projects")
     def post_project():
         payload = request.get_json(silent=True) or {}

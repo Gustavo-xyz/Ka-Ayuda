@@ -14,7 +14,7 @@ import {
   Send,
   Users,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   createDependency,
   createEmptyProject,
@@ -25,7 +25,13 @@ import {
   upsertProject,
   validateProjectForPublish,
 } from "./lib/projects";
-import { createGoogleMapsEmbedUrl, createGoogleMapsUrl, hasCoordinates, type MapPosition } from "./lib/maps";
+import {
+  createGoogleMapsEmbedUrl,
+  createGoogleMapsUrl,
+  hasCoordinates,
+  parseGoogleMapsPosition,
+  type MapPosition,
+} from "./lib/maps";
 import type { AyudaProject, DependencyItem, Location, ProjectStatus, PublishState } from "./types";
 
 declare global {
@@ -49,14 +55,10 @@ const publishLabels: Record<PublishState, string> = {
   published: "Published",
 };
 
-<<<<<<< Updated upstream
-const DEFAULT_MAP_CENTER = { lat: 14.5995, lng: 120.9842 };
-=======
 const DEFAULT_MAP_POSITION: MapPosition = {
   lat: 14.5995,
   lng: 120.9842,
 };
->>>>>>> Stashed changes
 
 let googleMapsPromise: Promise<any> | null = null;
 
@@ -116,8 +118,8 @@ function formatDateTime(value: string): string {
   }).format(date);
 }
 
-function createMapsSearchUrl(lat: number, lng: number): string {
-  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+function isNumericOnly(value: string): boolean {
+  return /^\d+(\.\d+)?$/.test(value.trim());
 }
 
 function normalizeProject(project: AyudaProject): AyudaProject {
@@ -134,6 +136,7 @@ function normalizeProject(project: AyudaProject): AyudaProject {
     dependencies: project.dependencies
       .map((item) => ({ ...item, label: item.label.trim() }))
       .filter((item) => item.label),
+    beneficiaryTarget: project.beneficiaryTarget.trim(),
     statusNote: project.statusNote.trim(),
   };
 }
@@ -183,8 +186,9 @@ function App() {
 
   const publishValidation = useMemo(() => validateProjectForPublish(normalizeProject(draft)), [draft]);
   const draftIsSaved = projects.some((project) => project.id === draft.id);
-  const publishedProjects = projects.filter((project) => project.publishState === "published").length;
-  const readyProjects = projects.filter(isProjectReady).length;
+  const activeProjects = projects.filter((project) => project.status === "active").length;
+  const upcomingProjects = projects.filter((project) => project.status === "upcoming").length;
+  const archivedProjects = projects.filter((project) => project.status === "archived").length;
 
   function handleLogin() {
     window.sessionStorage.setItem(AUTH_STORAGE_KEY, "true");
@@ -250,6 +254,12 @@ function App() {
 
     if (!normalized.name) {
       setFormErrors(["Project name is required to save."]);
+      setFormMessage("");
+      return;
+    }
+
+    if (normalized.beneficiaryTarget && isNumericOnly(normalized.beneficiaryTarget)) {
+      setFormErrors(["Beneficiary target must be a classification, not a number."]);
       setFormMessage("");
       return;
     }
@@ -338,9 +348,9 @@ function App() {
           <h1>Ayuda Project Manager</h1>
         </div>
         <div className="topbar-actions">
-          <Metric label="Projects" value={projects.length} />
-          <Metric label="Published" value={publishedProjects} />
-          <Metric label="Ready" value={readyProjects} />
+          <Metric label="Active" value={activeProjects} />
+          <Metric label="Upcoming" value={upcomingProjects} />
+          <Metric label="Archived" value={archivedProjects} />
           <button className="button ghost" onClick={handleLogout} type="button">
             <LogOut aria-hidden="true" size={18} />
             Logout
@@ -495,7 +505,7 @@ function App() {
                 </label>
 
                 <label className="field">
-                  <span>Beneficiary Target</span>
+                  <span>Beneficiary Classification</span>
                   <input
                     list="beneficiary-classifications"
                     onChange={(event) => updateDraftField("beneficiaryTarget", event.target.value)}
@@ -509,11 +519,6 @@ function App() {
                     <option value="Students" />
                     <option value="Fisherfolk" />
                   </datalist>
-                </label>
-
-                <label className="field">
-                  <span>Publish State</span>
-                  <input readOnly value={publishLabels[draft.publishState]} />
                 </label>
               </div>
             </section>
@@ -798,8 +803,6 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
 
   useEffect(() => {
     if (mapsState !== "ready" || !mapRef.current || !window.google?.maps) {
-<<<<<<< Updated upstream
-=======
       return;
     }
 
@@ -880,57 +883,25 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
         markerRef.current = null;
       }
 
->>>>>>> Stashed changes
       return;
     }
 
-    const hasLocation = location.lat != null && location.lng != null;
-    const center = hasLocation ? { lat: location.lat!, lng: location.lng! } : DEFAULT_MAP_CENTER;
+    const center = { lat: location.lat, lng: location.lng };
 
     mapInstanceRef.current.setCenter(center);
 
-    if (hasLocation && !markerRef.current) {
+    if (!markerRef.current) {
       markerRef.current = new window.google.maps.Marker({
         map: mapInstanceRef.current,
         position: center,
         title: location.address || "Selected venue",
       });
-    } else if (hasLocation) {
+    } else {
       markerRef.current.setMap(mapInstanceRef.current);
       markerRef.current.setPosition(center);
-<<<<<<< Updated upstream
-    } else if (markerRef.current) {
-      markerRef.current.setMap(null);
-    }
-
-    const clickListener = mapInstanceRef.current.addListener("click", (event: any) => {
-      if (!event.latLng) {
-        return;
-      }
-
-      const clickedPos = {
-        lat: event.latLng.lat(),
-        lng: event.latLng.lng(),
-      };
-
-      onChange({
-        ...location,
-        lat: clickedPos.lat,
-        lng: clickedPos.lng,
-        placeId: undefined,
-        mapsUrl: createMapsSearchUrl(clickedPos.lat, clickedPos.lng),
-      });
-
-      console.log(`Clicked at: ${clickedPos.lat}, ${clickedPos.lng}`);
-    });
-
-    return () => clickListener.remove();
-  }, [location, mapsState, onChange]);
-=======
       markerRef.current.setTitle(location.address || "Selected venue");
     }
   }, [location.address, location.lat, location.lng, mapsState]);
->>>>>>> Stashed changes
 
   return (
     <div className="location-grid">
@@ -947,7 +918,17 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
         <label className="field">
           <span>Google Maps URL</span>
           <input
-            onChange={(event) => onChange({ ...location, mapsUrl: event.target.value })}
+            onChange={(event) => {
+              const mapsUrl = event.target.value;
+              const position = parseGoogleMapsPosition(mapsUrl);
+
+              onChange({
+                ...location,
+                lat: position?.lat ?? location.lat,
+                lng: position?.lng ?? location.lng,
+                mapsUrl,
+              });
+            }}
             placeholder="https://maps.google.com/..."
             value={location.mapsUrl ?? ""}
           />
@@ -971,9 +952,6 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
         </div>
       </div>
       <div className="map-preview" ref={mapRef}>
-<<<<<<< Updated upstream
-        {mapsState !== "ready" ? (
-=======
         {mapsState !== "ready" && embedUrl ? (
           <iframe
             allowFullScreen
@@ -983,7 +961,6 @@ function GoogleMapsLocationField({ location, onChange }: GoogleMapsLocationField
             title="Google Maps venue preview"
           />
         ) : mapsState !== "ready" ? (
->>>>>>> Stashed changes
           <div>
             <MapPin aria-hidden="true" size={28} />
             <span>{location.address || "No venue selected"}</span>
