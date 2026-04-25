@@ -11,7 +11,12 @@ from pymysql.cursors import DictCursor
 
 from .config import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
 
-PROJECT_STATUSES = {"upcoming", "ongoing", "moved", "cancelled"}
+PROJECT_STATUSES = {"upcoming", "active", "archived"}
+LEGACY_STATUS_MAP = {
+    "ongoing": "active",
+    "moved": "archived",
+    "cancelled": "archived",
+}
 
 
 def _quote_identifier(value: str) -> str:
@@ -76,6 +81,27 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _normalize_status(value: Any) -> str:
+    if isinstance(value, str):
+        status = value.strip()
+        status = LEGACY_STATUS_MAP.get(status, status)
+
+        if status in PROJECT_STATUSES:
+            return status
+
+    return "upcoming"
+
+
+def _normalize_beneficiary_target(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return str(int(value)) if float(value).is_integer() else str(value)
+
+    return ""
 
 
 def to_sql_datetime(value: Any) -> str | None:
@@ -195,10 +221,10 @@ def normalize_project_payload(input_data: Any) -> dict[str, Any]:
             "mapsUrl": maps_url.strip() if isinstance(maps_url, str) else "",
         },
         "schedule": schedule if isinstance(schedule, str) else "",
-        "beneficiaryTarget": int(beneficiary_target) if _is_finite_number(beneficiary_target) else 0,
+        "beneficiaryTarget": _normalize_beneficiary_target(beneficiary_target),
         "dependencies": _normalize_dependencies(payload.get("dependencies")),
         "publishState": "published" if payload.get("publishState") == "published" else "draft",
-        "status": payload.get("status") if payload.get("status") in PROJECT_STATUSES else "upcoming",
+        "status": _normalize_status(payload.get("status")),
         "statusNote": status_note.strip() if isinstance(status_note, str) else "",
         "createdAt": created_at if isinstance(created_at, str) and created_at else now,
         "updatedAt": now,
@@ -233,9 +259,9 @@ def ensure_schema() -> None:
                   lng DECIMAL(10,7) NULL,
                   maps_url VARCHAR(500) NULL,
                   schedule_at DATETIME NULL,
-                  beneficiary_target INT UNSIGNED NOT NULL,
+                  beneficiary_target VARCHAR(120) NOT NULL DEFAULT '',
                   publish_state ENUM('draft', 'published') NOT NULL DEFAULT 'draft',
-                  status ENUM('upcoming', 'ongoing', 'moved', 'cancelled') NOT NULL DEFAULT 'upcoming',
+                  status ENUM('upcoming', 'active', 'archived') NOT NULL DEFAULT 'upcoming',
                   status_note TEXT NULL,
                   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -296,6 +322,18 @@ def ensure_schema() -> None:
                 """
             )
             cursor.execute("ALTER TABLE projects MODIFY schedule_at DATETIME NULL")
+            cursor.execute("ALTER TABLE projects MODIFY beneficiary_target VARCHAR(120) NOT NULL DEFAULT ''")
+            cursor.execute(
+                "ALTER TABLE projects MODIFY status "
+                "ENUM('upcoming', 'ongoing', 'moved', 'cancelled', 'active', 'archived') "
+                "NOT NULL DEFAULT 'upcoming'"
+            )
+            cursor.execute("UPDATE projects SET status = 'active' WHERE status = 'ongoing'")
+            cursor.execute("UPDATE projects SET status = 'archived' WHERE status IN ('moved', 'cancelled')")
+            cursor.execute(
+                "ALTER TABLE projects MODIFY status "
+                "ENUM('upcoming', 'active', 'archived') NOT NULL DEFAULT 'upcoming'"
+            )
         connection.commit()
     finally:
         connection.close()
@@ -442,7 +480,7 @@ def list_projects(*, published_only: bool = False, project_ids: list[str] | None
         if row.get("lng") is not None:
             location["lng"] = _decimal_to_float(row["lng"])
 
-        status = row.get("status") if row.get("status") in PROJECT_STATUSES else "upcoming"
+        status = _normalize_status(row.get("status"))
 
         projects.append(
             {
@@ -452,7 +490,7 @@ def list_projects(*, published_only: bool = False, project_ids: list[str] | None
                 "eligibility": eligibility_by_project.get(row_id, []),
                 "location": location,
                 "schedule": to_ui_datetime(row.get("schedule_at")),
-                "beneficiaryTarget": int(row.get("beneficiary_target") or 0),
+                "beneficiaryTarget": str(row.get("beneficiary_target") or ""),
                 "dependencies": dependencies_by_project.get(row_id, []),
                 "publishState": "published" if row.get("publish_state") == "published" else "draft",
                 "status": status,

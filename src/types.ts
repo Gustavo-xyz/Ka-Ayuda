@@ -1,6 +1,6 @@
 export type PublishState = "draft" | "published";
 
-export type ProjectStatus = "upcoming" | "ongoing" | "moved" | "cancelled";
+export type ProjectStatus = "upcoming" | "active" | "archived";
 
 export interface Location {
   address: string;
@@ -23,7 +23,7 @@ export interface AyudaProject {
   eligibility: string[];
   location: Location;
   schedule: string;
-  beneficiaryTarget: number;
+  beneficiaryTarget: string;
   dependencies: DependencyItem[];
   publishState: PublishState;
   status: ProjectStatus;

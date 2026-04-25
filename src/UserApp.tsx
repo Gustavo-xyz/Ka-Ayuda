@@ -1,11 +1,9 @@
 import {
-  AlertCircle,
   Bell,
   Bookmark,
   BookmarkCheck,
   CalendarClock,
   CheckCircle2,
-  ClipboardCheck,
   FileText,
   ListChecks,
   MapPin,
@@ -18,23 +16,22 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { isProjectReady, loadPublishedProjects } from "./lib/projects";
+import { loadPublishedProjects } from "./lib/projects";
+import { createGoogleMapsEmbedUrl } from "./lib/maps";
 import type { AyudaProject, ProjectStatus } from "./types";
 
 const USER_BOOKMARKS_KEY = "ayuda-user-bookmarks";
 
 const statusLabels: Record<ProjectStatus, string> = {
   upcoming: "Upcoming",
-  ongoing: "Ongoing",
-  moved: "Moved",
-  cancelled: "Cancelled",
+  active: "Active",
+  archived: "Archived",
 };
 
 const statusMessages: Record<ProjectStatus, string> = {
   upcoming: "Prepare your requirements before the scheduled distribution.",
-  ongoing: "Distribution is currently open at the announced venue.",
-  moved: "Check the latest advisory before going to the venue.",
-  cancelled: "Distribution is cancelled until a new announcement is posted.",
+  active: "Distribution is currently open at the announced venue.",
+  archived: "This ayuda announcement has been archived.",
 };
 
 const claimingSteps = ["Registration", "Submit Requirements", "Verification", "Claim Ayuda"];
@@ -74,7 +71,7 @@ function UserApp() {
   const [projects, setProjects] = useState<AyudaProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | ProjectStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus>("active");
   const [savedOnly, setSavedOnly] = useState(false);
   const [bookmarks, setBookmarks] = useState<Set<string>>(() => new Set(loadBookmarkIds()));
   const [eligibilityAnswers, setEligibilityAnswers] = useState<Record<string, Record<number, boolean>>>({});
@@ -108,7 +105,7 @@ function UserApp() {
         project.location.address.toLowerCase().includes(normalizedQuery) ||
         project.requirements.some((requirement) => requirement.toLowerCase().includes(normalizedQuery)) ||
         project.eligibility.some((rule) => rule.toLowerCase().includes(normalizedQuery));
-      const matchesStatus = statusFilter === "all" || project.status === statusFilter;
+      const matchesStatus = project.status === statusFilter;
       const matchesSaved = !savedOnly || bookmarks.has(project.id);
 
       return matchesQuery && matchesStatus && matchesSaved;
@@ -120,7 +117,6 @@ function UserApp() {
   }, [filteredProjects, selectedProjectId]);
 
   const bookmarkedCount = projects.filter((project) => bookmarks.has(project.id)).length;
-  const readyCount = projects.filter(isProjectReady).length;
 
   async function refreshProjects() {
     try {
@@ -177,7 +173,6 @@ function UserApp() {
         <div className="topbar-actions">
           <Metric label="Available" value={projects.length} />
           <Metric label="Saved" value={bookmarkedCount} />
-          <Metric label="Ready" value={readyCount} />
           <button className="button ghost" onClick={() => void refreshProjects()} type="button">
             <RefreshCw aria-hidden="true" size={18} />
             Refresh
@@ -209,14 +204,12 @@ function UserApp() {
           <div className="filters user-filters" aria-label="Ayuda filters">
             <select
               aria-label="Status filter"
-              onChange={(event) => setStatusFilter(event.target.value as "all" | ProjectStatus)}
+              onChange={(event) => setStatusFilter(event.target.value as ProjectStatus)}
               value={statusFilter}
             >
-              <option value="all">All status</option>
+              <option value="active">Active</option>
               <option value="upcoming">Upcoming</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="moved">Moved</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="archived">Archived</option>
             </select>
             <label className="toggle-filter">
               <input checked={savedOnly} onChange={(event) => setSavedOnly(event.target.checked)} type="checkbox" />
@@ -255,9 +248,6 @@ function UserApp() {
                     </span>
                     <span className="project-row-meta">
                       <span className={`badge status-${project.status}`}>{statusLabels[project.status]}</span>
-                      <span className={`readiness ${isProjectReady(project) ? "ready" : "blocked"}`}>
-                        {isProjectReady(project) ? "Ready" : "Pending"}
-                      </span>
                       {isBookmarked ? <BookmarkCheck aria-hidden="true" size={17} /> : null}
                     </span>
                   </button>
@@ -329,6 +319,7 @@ function AyudaDetails({
   const documentsReady =
     project.requirements.length > 0 && project.requirements.every((_, index) => documentChecks[index] === true);
   const statusNote = project.statusNote || statusMessages[project.status];
+  const embedUrl = createGoogleMapsEmbedUrl(project.location);
 
   return (
     <>
@@ -359,22 +350,7 @@ function AyudaDetails({
           </div>
           <div className="detail-stat">
             <strong>{formatDateTime(project.schedule)}</strong>
-            <span>{project.beneficiaryTarget.toLocaleString()} beneficiaries</span>
-          </div>
-        </section>
-
-        <section className="detail-section readiness-section">
-          <div className="section-heading">
-            <ClipboardCheck aria-hidden="true" size={18} />
-            <h3>Event Readiness</h3>
-          </div>
-          <div className={`readiness-summary ${isProjectReady(project) ? "ready" : "blocked"}`}>
-            {isProjectReady(project) ? (
-              <CheckCircle2 aria-hidden="true" size={18} />
-            ) : (
-              <AlertCircle aria-hidden="true" size={18} />
-            )}
-            {isProjectReady(project) ? "All admin dependencies are ready." : "Some admin dependencies are pending."}
+            <span>{project.beneficiaryTarget || "Beneficiary classification to be announced"}</span>
           </div>
         </section>
 
@@ -385,10 +361,20 @@ function AyudaDetails({
           </div>
           <div className="user-map-layout">
             <div className="map-preview user-map-preview">
-              <div>
-                <MapPin aria-hidden="true" size={28} />
-                <span>{project.location.address || "No venue selected"}</span>
-              </div>
+              {embedUrl ? (
+                <iframe
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={embedUrl}
+                  title="Google Maps venue preview"
+                />
+              ) : (
+                <div>
+                  <MapPin aria-hidden="true" size={28} />
+                  <span>{project.location.address || "No venue selected"}</span>
+                </div>
+              )}
             </div>
             <div className="venue-actions">
               <strong>{project.location.address || "Venue to be announced"}</strong>

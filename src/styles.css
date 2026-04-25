@@ -177,7 +177,7 @@ button:disabled {
 .filters {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .project-list {
@@ -411,17 +411,16 @@ button:disabled {
   color: var(--blue);
 }
 
-.status-ongoing {
+.status-active {
   background: #e7f6ee;
   color: var(--green);
 }
 
-.status-moved {
-  background: #fff3d6;
-  color: var(--amber);
+.status-archived {
+  background: #f0f3f7;
+  color: #3f4d5c;
 }
 
-.status-cancelled,
 .readiness.blocked,
 .readiness-summary.blocked,
 .map-state.error {
@@ -501,6 +500,12 @@ button:disabled {
   max-width: 28ch;
   padding: 18px;
   text-align: center;
+}
+
+.map-preview iframe {
+  border: 0;
+  height: 100%;
+  width: 100%;
 }
 
 .dependency-list {
@@ -679,16 +684,12 @@ button:disabled {
   border-color: rgba(36, 87, 166, 0.28);
 }
 
-.status-banner.status-ongoing {
+.status-banner.status-active {
   border-color: rgba(8, 116, 67, 0.28);
 }
 
-.status-banner.status-moved {
-  border-color: rgba(153, 106, 9, 0.32);
-}
-
-.status-banner.status-cancelled {
-  border-color: rgba(180, 35, 24, 0.32);
+.status-banner.status-archived {
+  border-color: rgba(63, 77, 92, 0.3);
 }
 
 .user-detail-grid {

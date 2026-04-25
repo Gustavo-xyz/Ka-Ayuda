@@ -1,4 +1,4 @@
-import type { AyudaProject, DependencyItem } from "../types";
+import type { AyudaProject, DependencyItem, ProjectStatus } from "../types";
 
 export const PROJECTS_API_PATH = "/api/projects";
 
@@ -8,6 +8,22 @@ export interface ValidationResult {
 }
 
 export const defaultDependencyLabels = ["Funds Ready", "Venue Ready", "Staff Ready"];
+
+function normalizeStatus(value: unknown): ProjectStatus {
+  if (value === "active" || value === "ongoing") {
+    return "active";
+  }
+
+  if (value === "archived" || value === "moved" || value === "cancelled") {
+    return "archived";
+  }
+
+  return "upcoming";
+}
+
+function normalizeBeneficiaryClassification(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
 
 function normalizeProject(project: AyudaProject): AyudaProject {
   return {
@@ -27,7 +43,7 @@ function normalizeProject(project: AyudaProject): AyudaProject {
       mapsUrl: project.location?.mapsUrl ?? "",
     },
     schedule: project.schedule ?? "",
-    beneficiaryTarget: Number.isFinite(project.beneficiaryTarget) ? project.beneficiaryTarget : 0,
+    beneficiaryTarget: normalizeBeneficiaryClassification(project.beneficiaryTarget),
     dependencies: Array.isArray(project.dependencies)
       ? project.dependencies
           .filter((dependency): dependency is DependencyItem => Boolean(dependency?.id && dependency?.label))
@@ -38,9 +54,7 @@ function normalizeProject(project: AyudaProject): AyudaProject {
           }))
       : [],
     publishState: project.publishState === "published" ? "published" : "draft",
-    status: ["upcoming", "ongoing", "moved", "cancelled"].includes(project.status)
-      ? project.status
-      : "upcoming",
+    status: normalizeStatus(project.status),
     statusNote: project.statusNote ?? "",
     createdAt: project.createdAt ?? new Date().toISOString(),
     updatedAt: project.updatedAt ?? new Date().toISOString(),
@@ -76,7 +90,7 @@ export function createEmptyProject(): AyudaProject {
       mapsUrl: "",
     },
     schedule: "",
-    beneficiaryTarget: 0,
+    beneficiaryTarget: "",
     dependencies: defaultDependencyLabels.map((label) => createDependency(label)),
     publishState: "draft",
     status: "upcoming",
@@ -108,8 +122,8 @@ export function validateProjectForPublish(project: AyudaProject): ValidationResu
     errors.push("Date and time are required.");
   }
 
-  if (!Number.isFinite(project.beneficiaryTarget) || project.beneficiaryTarget <= 0) {
-    errors.push("Beneficiary target must be greater than zero.");
+  if (!project.beneficiaryTarget.trim()) {
+    errors.push("Beneficiary classification is required.");
   }
 
   if (project.requirements.filter(Boolean).length === 0) {
